@@ -17,6 +17,10 @@ kwargs = {
     "nutrition_heatmap": None,
 }
 
+unions = {
+    'frequencies': ['habbits_radar', 'habbits_linear']
+}
+
 
 if __name__ == '__main__':
     bot_token = sys.argv[1]
@@ -31,12 +35,15 @@ if __name__ == '__main__':
                 'https://www.googleapis.com/auth/drive']
 
     # check what functions are exist and add them
+    # functions is something like [[func, func, ...], func, ...]
     functions = []
     for f in sys.argv[3:]:
-        if f not in dir(pl):
-            print(f"Warning! Function \"{f}\" doesn't exist!")
-        else:
+        if (x := unions.get(f, False)):
+            functions.append([getattr(pl, subf) for subf in x])
+        elif f in dir(pl):
             functions.append(getattr(pl, f))
+        else:
+            print(f"Warning! Function \"{f}\" doesn't exist!")
     print()
 
     if functions:

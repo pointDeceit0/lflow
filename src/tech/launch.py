@@ -1,12 +1,12 @@
 from collections.abc import Callable
-from typing import List, Tuple
+from typing import List, Tuple, Union
 import pandas as pd
 import datetime
 import numpy as np
 from io import BytesIO
 
 
-def launch_plot_functions(functions: List[Callable],
+def launch_plot_functions(functions: List[Union[List[Callable], Callable]],
                           df: pd.DataFrame, metadata: pd.DataFrame, trainings: pd.DataFrame, **kwargs
                           ) -> List[Tuple[BytesIO, str]]:
     """Sequentially launches all plots making functions
@@ -35,8 +35,17 @@ def launch_plot_functions(functions: List[Callable],
         )
     )
 
-    return [
-        f(df, metadata, **x)
-        if kwargs is not None and (x := kwargs.get(f.__name__, False)) else f(df, metadata)
-        for f in functions
-    ]
+    ret = []
+    for f in functions:
+        # case when multiple plot must be union in one list
+        if isinstance(f, list):
+            ret.append([
+                subf(df, metadata, **x)
+                if kwargs is not None and (x := kwargs.get(subf.__name__, False)) else subf(df, metadata)
+                for subf in f
+            ])
+        elif kwargs is not None and (x := kwargs.get(f.__name__, False)):
+            ret.append(f(df, metadata, **x))
+        else:
+            ret.append(f(df, metadata))
+    return ret
