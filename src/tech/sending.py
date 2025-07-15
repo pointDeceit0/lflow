@@ -4,6 +4,15 @@ from io import BytesIO
 
 
 def send_messages(bot_token: str, chat_id: str, lst: List[Tuple[BytesIO, str]], functions: List[str]):
+    """Sending plots with text to them in telegram
+
+    Args:
+        bot_token (str): telegram bot token
+        chat_id (str): telegram chat id
+        lst (List[Tuple[BytesIO, str]]): list of tuples where each one contains BytesIO view of plot firstly, and
+                str message to this plot secondly
+        functions (List[str]): according to lst launced functions.
+    """
     bot = telebot.TeleBot(bot_token)
 
     print()
