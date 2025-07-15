@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import datetime
 from io import BytesIO
 from typing import Tuple
 
@@ -14,6 +15,14 @@ from matplotlib.transforms import Affine2D
 
 
 plt.style.use('seaborn-v0_8-whitegrid')
+
+
+def _convert_to_bytes(fig) -> BytesIO:
+    plot_file = BytesIO()
+    fig = fig.get_figure()
+    fig.savefig(plot_file, format='png', dpi=200)
+    plot_file.seek(0)
+    return plot_file
 
 
 def radar_factory(num_vars, frame='circle'):
@@ -109,7 +118,9 @@ def habbits_radar(df: pd.DataFrame, metadata: pd.DataFrame, **kwargs) -> Tuple[B
     Args:
         df (pd.DataFrame): master dataframe
         metadata (pd.DataFrame): metadata of master dataframe. Columns 'feature' and 'metatype' are neccesary
-        **kwargs: additional parameters
+
+        ** exclude (tuple): the tuple of excluding frequency features
+        ** TODO: support of arbitrary messages
 
     Returns:
         Tuple[BytesIO, str]: BytesIO view of plot and message with plot
@@ -145,21 +156,85 @@ def habbits_radar(df: pd.DataFrame, metadata: pd.DataFrame, **kwargs) -> Tuple[B
 
     # add legend relative to top-left plot
     ax.legend(('Current week', 'Previous week'), loc=(0.9, .95), labelspacing=0.1, fontsize='small')
-    message = '_' + ' — '.join(
-        df.loc[df['period'] == 'Previous week', 'date'].iloc[[0, -1]].map(lambda x: x.strftime('%d.%m.%Y'))
-    ) + ' : ' +\
-        ' — '.join(
-            df.loc[df['period'] == 'Current week', 'date'].iloc[[0, -1]].map(lambda x: x.strftime('%d.%m.%Y'))
-        ) + ' period._' +\
-            '\n\n_Comparison of Current week and Previous week frequency features_'
+    ax.set_title('Frequencies comparison for last 7 days and 7 days before them', fontweight='bold')
 
-    plot_file = BytesIO()
-    fig = fig.get_figure()
-    fig.savefig(plot_file, format='png', dpi=200)
-    plot_file.seek(0)
-    return plot_file, message
+    # TODO:
+    message = '_comming soon..._'
+    # message = '_' + ' — '.join(
+    #     df.loc[df['period'] == 'Previous week', 'date'].iloc[[0, -1]].map(lambda x: x.strftime('%d.%m.%Y'))
+    # ) + ' : ' +\
+    #     ' — '.join(
+    #         df.loc[df['period'] == 'Current week', 'date'].iloc[[0, -1]].map(lambda x: x.strftime('%d.%m.%Y'))
+    #     ) + ' period._' +\
+    #         '\n\n_Comparison of Current week and Previous week frequency features_'
+
+    return _convert_to_bytes(fig), message
 
 
-def habbits_linear(df: pd.DataFrame, metadata: pd.DataFrame, **kwargs):
-    # df = df.loc[:, ~df.columns.isin(list(exclude))]
-    pass
+def habbits_linear(df: pd.DataFrame, metadata: pd.DataFrame, **kwargs) -> Tuple[BytesIO, str]:
+    """Makes bar plot for frequency features
+
+    Args:
+        df (pd.DataFrame): master dataframe
+        metadata (pd.DataFrame): metadata of master dataframe. Columns 'feature' and 'metatype' are neccesary
+
+        ** exclude (tuple): the tuple of excluding frequency features
+        ** number_of_weeks (int): how last weeks to take. Defaults to 10
+        ** base_width (float): base_width of each group of bars, width of each separate bar is calculated from that.
+                                    Defaults to 1
+        ** TODO: list of tracking parameters and theirs trend and trend analysis
+        ** TODO: support of arbitrary messages
+
+    Returns:
+        Tuple[BytesIO, str]: BytesIO view of plot and message with plot
+
+    TODO: more meaningfull message
+    """
+    df = df.loc[
+        :, ['date', 'period'] + metadata.loc[metadata['metatype'].isin(['frequency_tracking']), 'feature'].to_list()
+    ]
+    if len(exclude := kwargs.get('exclude', 0)) == 1:
+        df = df.loc[:, ~df.columns.isin(exclude)]
+    elif len(exclude) > 1:
+        df = df.loc[:, ~df.columns.isin(list(exclude))]
+
+    # forming dataframe of sequentially following dates and left join main dataframe to it to get sequential weeks
+    df = pd.DataFrame(
+        {
+            'date': pd.date_range(start=df['date'].min(), end=df['date'].max(), freq='D').date
+        }
+    ).merge(df, 'left', 'date')
+
+    # create week start date for each date
+    df['week_start'] = (df['date'] - (df['date'].map(lambda x: datetime.timedelta(x.weekday()))))
+
+    # create groups by start of week and summing them, where all values for week are nulls then null is setted
+    groups = df.iloc[:, 2:].groupby('week_start').apply(
+        lambda x: x.sum() if ~x.isna().all().all() else None
+    ).iloc[kwargs.get('number_of_weeks', 10):]
+
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    n_bars = groups.shape[0]
+    bar_width = kwargs.get('base_width', 0.7) / n_bars
+
+    fig, ax = plt.subplots(figsize=(16, 12))
+    bars = []
+    for i, (_, values) in enumerate(groups.items()):
+        x_offset = (i - n_bars / 2) * bar_width + bar_width / 2
+        for x, y in enumerate(values.values):
+            bar = ax.bar(x + x_offset, y, width=bar_width, color=colors[i % len(colors)])
+        bars.append(bar[0])
+
+    ax.legend(bars, [' '.join(c.split('_')).capitalize() for c in groups])
+    ax.set_xticks(np.arange(n_bars), labels=groups.index)
+
+    ax.set_xlabel('t', loc='right')
+    ax.set_ylabel('frequency', loc='top', rotation=0)
+    fig.tight_layout()
+
+    ax.set_title(f'Frequencies for last {kwargs.get('number_of_weeks', 10)} weeks', fontweight='bold')
+
+    # TODO:
+    message = '_comming soon..._'
+
+    return _convert_to_bytes(fig), message
