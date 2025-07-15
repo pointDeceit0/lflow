@@ -7,7 +7,7 @@ from io import BytesIO
 
 
 def launch_plot_functions(functions: List[Callable],
-                          df: pd.DataFrame, metadata: pd.DataFrame, trainings: pd.DataFrame
+                          df: pd.DataFrame, metadata: pd.DataFrame, trainings: pd.DataFrame, **kwargs
                           ) -> List[Tuple[BytesIO, str]]:
     """Sequentially launches all plots making functions
 
@@ -16,6 +16,7 @@ def launch_plot_functions(functions: List[Callable],
         df (pd.DataFrame): master dataframe with all data
         metadata (pd.DataFrame): metadata of master dataframe that neccesary must contain metatype and feature
         trainings (pd.DataFrame): trainings dataframe, which must containt date column
+        **kwargs: additional parameters to functions
 
     Returns:
         List[Tuple[BytesIO, str]]: list of tuples where each one contains BytesIO view of plot firstly, and
@@ -34,4 +35,8 @@ def launch_plot_functions(functions: List[Callable],
         )
     )
 
-    return [f(df, metadata) for f in functions]
+    return [
+        f(df, metadata, **x)
+        if kwargs is not None and (x := kwargs.get(f.__name__, False)) else f(df, metadata)
+        for f in functions
+    ]
