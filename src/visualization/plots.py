@@ -202,7 +202,10 @@ def habbits_linear(df: pd.DataFrame, metadata: pd.DataFrame, **kwargs) -> Tuple[
     # forming dataframe of sequentially following dates and left join main dataframe to it to get sequential weeks
     df = pd.DataFrame(
         {
-            'date': pd.date_range(start=df['date'].min(), end=df['date'].max(), freq='D').date
+            'date': pd.date_range(
+                start=df['date'].min(), end=df['date'].max() + datetime.timedelta(6 - df['date'].max().weekday()),
+                freq='D'
+            ).date
         }
     ).merge(df, 'left', 'date')
 
