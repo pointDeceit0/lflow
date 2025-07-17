@@ -18,6 +18,7 @@ plt.style.use('seaborn-v0_8-whitegrid')
 
 
 def _convert_to_bytes(fig) -> BytesIO:
+    # TODO: arbitrary dpi
     plot_file = BytesIO()
     fig = fig.get_figure()
     fig.savefig(plot_file, format='png', dpi=200)
@@ -210,8 +211,8 @@ def habbits_linear(df: pd.DataFrame, metadata: pd.DataFrame, **kwargs) -> Tuple[
 
     # create groups by start of week and summing them, where all values for week are nulls then null is setted
     groups = df.iloc[:, 2:].groupby('week_start').apply(
-        lambda x: x.sum() if ~x.isna().all().all() else None
-    ).iloc[kwargs.get('number_of_weeks', 10):]
+        lambda x: x.sum() if ~x.isna().any().all() else None
+    ).iloc[-kwargs.get('number_of_weeks', 10):]
 
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     n_bars = groups.shape[0]
