@@ -44,7 +44,7 @@ def launch_plot_functions(functions: List[Union[List[Callable], Callable]],
                 if kwargs is not None and (x := kwargs.get(subf.__name__, False)) else subf(df, metadata)
                 for subf in f
             ])
-        elif kwargs is not None and (x := kwargs.get(f.__name__, False)):
+        elif kwargs.get(f.__name__, None) is not None and (x := kwargs.get(f.__name__, False)):
             ret.append(f(df, metadata, **x))
         else:
             ret.append(f(df, metadata))
