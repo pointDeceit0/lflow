@@ -1,9 +1,12 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import seaborn as sns
 import datetime
 from io import BytesIO
 from typing import Tuple
+
+from scipy.stats import ttest_ind
 
 # import matplotlib.colors as mcolors
 from matplotlib.patches import Circle, RegularPolygon
@@ -12,6 +15,7 @@ from matplotlib.projections import register_projection
 from matplotlib.projections.polar import PolarAxes
 from matplotlib.spines import Spine
 from matplotlib.transforms import Affine2D
+from matplotlib.patches import Patch
 
 
 plt.style.use('seaborn-v0_8-whitegrid')
@@ -229,7 +233,7 @@ def habbits_linear(df: pd.DataFrame, metadata: pd.DataFrame, **kwargs) -> Tuple[
             bar = ax.bar(x + x_offset, y, width=bar_width, color=colors[i % len(colors)])
         bars.append(bar[0])
 
-    ax.legend(bars, [' '.join(c.split('_')).capitalize() for c in groups])
+    ax.legend(bars, [' '.join(c.split('_')).capitalize() for c in groups], loc='upper right')
     ax.set_xticks(np.arange(n_bars), labels=groups.index)
 
     ax.set_xlabel('t', loc='right')
@@ -240,5 +244,102 @@ def habbits_linear(df: pd.DataFrame, metadata: pd.DataFrame, **kwargs) -> Tuple[
 
     # TODO:
     message = '_comming soon..._'
+
+    return _convert_to_bytes(fig), message
+
+
+def CPFC_violins(df: pd.DataFrame, metadata: pd.DataFrame, **kwargs) -> Tuple[BytesIO, str]:
+    """Makes 4 violin plots for callories, proteins, fats, carbohydrates compare theirs consumption by periods
+
+    Args:
+        df (pd.DataFrame): master dataframe
+        metadata (pd.DataFrame): metadata of master dataframe. Columns 'feature' and 'metatype' are neccesary
+        TODO: **kwargs
+
+    Returns:
+        Tuple[BytesIO, str]: Tuple[BytesIO, str]: BytesIO view of plot and message with plot
+
+    TODO TODO TODO: observation of such a specific few features isn't seemed like a general approach.
+                    However, they are considered together in most cases.
+                    But more general approach should be considered.
+
+    TODO TODO TODO: also it isn't seemed good that there's no option of choosing a period for comparison.
+                    The approach where specific dates periods are considered seemed more attractive.
+                    And it is not so complicated in realisation: it could be done over existing realisation replacing
+                    existing values of period column with new values recieved from input. But the problem of getting
+                    starts and ends of period are opened due to the fact that we cannot send it directly.
+                    Maybe another approaches of launching functions with variables should be considered.
+                    Realisation with kwargs doesn't seemed to me elegant, but again, it could be implemented fast.
+    """
+    df = df.loc[
+        :, ['date', 'period'] + metadata.loc[metadata['metatype'].isin(['nutrition_tracking']), 'feature'].to_list()
+    ]
+    fig, ax = plt.subplots(1, df.shape[1] - 2, figsize=(20, 10))
+    # TODO: add to kwargs
+    fig.suptitle('CPFC periods densities', fontsize=16)
+
+    # TODO: add to kwargs bellow variables
+    RED_FLAG = '🟥'
+    GREEN_FLAG = '🟩'
+    YELLOW_FLAG = '🟨'
+    prev_per_col, prev_week_col, curr_week_col = "#4d88b3", "#1a5a77", "#f7e64c"
+    gap = 0.03
+    alpha = 0.5
+
+    message = 'AVG magnitudes\\*:\n'
+    for k, feature in enumerate(df.columns[2:]):
+        current_data = df[df['period'] == 'Current week'].copy()
+        previous_data = df[df['period'] != 'Current week'].copy()
+        sns.violinplot(
+            data=previous_data, y=feature, ax=ax[k],
+            hue="period", split=True, gap=gap, cut=0,
+            inner='quart',
+            palette='mako', legend=None, alpha=alpha, linewidth=1.2,
+            color=[prev_per_col, prev_week_col]
+        )
+
+        violin_parts = ax[k].violinplot([current_data[feature]],
+                                        positions=[gap],
+                                        vert=True,
+                                        showmeans=False, showmedians=False, showextrema=False,
+                                        widths=0.5)
+        # TODO: the problem of displaying quartiles of current week period isn't solved due to lack of
+        # TODO: due to lack of ideas how to do that. It should be done
+        for pc in violin_parts['bodies']:
+            pc.set_facecolor(curr_week_col)
+            pc.set_edgecolor('black')
+            pc.set_alpha(alpha)
+
+            # Get vertices and modify to keep only right side
+            # + gap / 4 provides aligning with other half of main violin
+            vertices = pc.get_paths()[0].vertices
+            vertices[:, 0] = np.maximum(vertices[:, 0], 0) + gap / 4
+
+        legend_patches = [
+            Patch(facecolor=prev_per_col, alpha=0.5, label='Previous period'),
+            Patch(facecolor=prev_week_col, alpha=0.5, label='Previous week'),
+            Patch(facecolor=curr_week_col, alpha=0.5, label='Current Week')
+        ]
+
+        # Add legend only to the last plot
+        if k == 3:
+            ax[k].legend(handles=legend_patches)
+
+        # message with sinificant changes
+        # NOTE: not sure that it is the most correct way to compare significance with all previous period
+        # 		maybe it would be better to compare with only previous week or specific period
+        tmp = ttest_ind(current_data[feature].mean(), previous_data[feature])[1]
+        change = round(
+            current_data[feature].mean() - previous_data[feature].mean(), 1
+        )
+        change = '+' + str(change) if change > 0 else change
+        message += (f'    {RED_FLAG if tmp <= .01 else YELLOW_FLAG if tmp <= .05 else GREEN_FLAG} '
+                    f'{feature}={round(current_data[feature].mean(), 1)} '
+                    f'({change})\n')
+    fig.tight_layout()
+
+    message += ('\n🟥 — _changes are significant on 1% level of confidence_\n🟨 — '
+                '_changes are significant on 5% level of confidence_\n🟩 — _changes are not significant_\n'
+                '\n\\* _changes are shown relative to the mean of previous weeks._')
 
     return _convert_to_bytes(fig), message

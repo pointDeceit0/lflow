@@ -134,6 +134,8 @@ def fill_condition_sheet(df: pd.DataFrame, metadata: pd.DataFrame) -> pd.DataFra
 
     Returns:
         pd.DataFrame: filled master dataframe
+
+    TODO: filling using only previous values not for the all period
     """
     for c in df.columns:
         match metadata.loc[metadata['feature'] == c, 'metatype'].iloc[0]:
@@ -178,5 +180,16 @@ def transform_enrichment_data(resource: Resource, SPREADSHEET_ID: str) -> List[p
 
     trains['train'] = 1
     df = df.merge(trains[['date', 'train']], 'left', 'date')
+
+    metadata = pd.concat([
+        metadata,
+        pd.DataFrame({
+            c: [v]
+            for v, c in zip(
+                ['train', 'binary', None, 'frequency_tracking'],
+                ['feature', 'measure unit', 'measure method', 'metatype']
+            )
+        })
+    ])
 
     return df, metadata, trains

@@ -23,7 +23,7 @@ unions = {
 }
 
 
-def main(CRED_FILE_PATH, SERVICES, SPREADSHEET_ID):
+def main(CRED_FILE_PATH, SERVICES, SPREADSHEET_ID, bot_token, chat_id, functions):
     print('-------------------------------------')
     start1 = time.time()
     resource = con.extract_data(CRED_FILE_PATH, SERVICES)
@@ -44,6 +44,8 @@ def main(CRED_FILE_PATH, SERVICES, SPREADSHEET_ID):
     print(f'---> Report was sent for {round(t3, 2)} s.\n')
     print(f'Total execution time is {round(t1 + t2 + t3, 2)} s.')
     print('-------------------------------------')
+
+    return df, metadata, trains
 
 
 if __name__ == '__main__':
@@ -71,6 +73,6 @@ if __name__ == '__main__':
     print()
 
     if functions:
-        main(CRED_FILE_PATH, SERVICES, SPREADSHEET_ID)
+        main(CRED_FILE_PATH, SERVICES, SPREADSHEET_ID, bot_token, chat_id, functions)
     else:
         print('No valid functions recieved.')
