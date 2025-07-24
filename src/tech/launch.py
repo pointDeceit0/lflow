@@ -7,7 +7,8 @@ from io import BytesIO
 
 
 def launch_plot_functions(functions: List[Union[List[Callable], Callable]],
-                          df: pd.DataFrame, metadata: pd.DataFrame, trainings: pd.DataFrame, **kwargs
+                          df: pd.DataFrame, metadata: pd.DataFrame, trainings: pd.DataFrame,
+                          expenses: pd.DataFrame, income: pd.DataFrame, **kwargs
                           ) -> List[Tuple[BytesIO, str]]:
     """Sequentially launches all plots making functions
 
@@ -39,11 +40,23 @@ def launch_plot_functions(functions: List[Union[List[Callable], Callable]],
     for f in functions:
         # case when multiple plot must be union in one list
         if isinstance(f, list):
-            ret.append([
-                subf(df, metadata, **x)
-                if kwargs is not None and (x := kwargs.get(subf.__name__, False)) else subf(df, metadata)
-                for subf in f
-            ])
+            tmp = []
+            for subf in f:
+                if kwargs is not None and (x := kwargs.get(subf.__name__, False)) and\
+                        (subf.__name__.startswith('expenses_') or subf.__name__.startswith('income_')):
+                    tmp.append(subf(expenses, income, **x))
+                elif subf.__name__.startswith('expenses_') or f.__name__.startswith('income_'):
+                    tmp.append(subf(expenses, income))
+                elif kwargs is not None and (x := kwargs.get(subf.__name__, False)):
+                    tmp.append(subf(df, metadata, **x))
+                else:
+                    tmp.append(subf(df, metadata))
+            ret.append(tmp)
+        elif kwargs.get(f.__name__, None) is not None and (x := kwargs.get(f.__name__, False)) and\
+                (f.__name__.startswith('expenses_') or f.__name__.startswith('income_')):
+            ret.append(f(expenses, income, **x))
+        elif f.__name__.startswith('expenses_') or f.__name__.startswith('income_'):
+            ret.append(f(expenses, income))
         elif kwargs.get(f.__name__, None) is not None and (x := kwargs.get(f.__name__, False)):
             ret.append(f(df, metadata, **x))
         else:

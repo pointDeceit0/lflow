@@ -125,6 +125,18 @@ def init_transform_train_sheet(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def init_transform_expenses_income_sheet(df: pd.DataFrame) -> pd.DataFrame:
+    df.columns = df.iloc[0].map(lambda x: '_'.join(x.lower().strip().split()))
+    df = df.iloc[1:]
+    df = df.reset_index(drop=True)
+    df = df[(~df['date'].isna()) & (df['date'] != '')]
+
+    df.loc[:, 'date'] = pd.to_datetime(df.loc[:, 'date']).dt.date
+    df.loc[:, 'amount'] = df.loc[:, 'amount'].str.replace(',', '.').astype(float)
+
+    return df
+
+
 def fill_condition_sheet(df: pd.DataFrame, metadata: pd.DataFrame) -> pd.DataFrame:
     """Making empties filling according to metatype from metadata sheet
 
@@ -174,12 +186,15 @@ def transform_enrichment_data(resource: Resource, SPREADSHEET_ID: str) -> List[p
     condition = init_transform_condition_sheet(get_data(resource, 'condition', SPREADSHEET_ID))
     metadata = init_transform_metadata_sheet(get_data(resource, 'manual condition', SPREADSHEET_ID))
     trains = init_transform_train_sheet(get_data(resource, 'trainings', SPREADSHEET_ID))
+    expenses = init_transform_expenses_income_sheet(get_data(resource, 'expenses', SPREADSHEET_ID))
+    income = init_transform_expenses_income_sheet(get_data(resource, 'income', SPREADSHEET_ID))
     data_metadata_consistensy_check(condition, metadata)
 
     df = fill_condition_sheet(condition, metadata)
 
     trains['train'] = 1
     df = df.merge(trains[['date', 'train']], 'left', 'date')
+    df.loc[:, 'train'] = df.loc[:, 'train'].fillna(0)
 
     metadata = pd.concat([
         metadata,
@@ -192,4 +207,4 @@ def transform_enrichment_data(resource: Resource, SPREADSHEET_ID: str) -> List[p
         })
     ])
 
-    return df, metadata, trains
+    return df, metadata, trains, expenses, income

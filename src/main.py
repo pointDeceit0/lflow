@@ -8,40 +8,41 @@ import tech.data as dt
 import tech.connection as con
 import tech.launch as launch
 import tech.sending as snd
+import json
 
 # all possible kwargs are reflected in according functions
-kwargs = {
+kwargs_example = {
     # src/visualizations/plots.py
     "habbits_radar": {'exclude': ('creatine', 'was_in_university')},
     "habbits_linear": {'grannulation': 'week',
                        'exclude': ('creatine', 'was_in_university'),
                        'number_of_weeks': 10},
     "nutrition_heatmap": None,
-    "CPFC_linear": {'grannulation': 'month', 'displayed_times': 5, 'show_gen_cond': True}
+    "CPFC_linear": {'grannulation': 'day', 'displayed_times': 30, 'show_gen_cond': True}
 }
 
 # unions of plots in one message, TODO: text showed only for first plot
-unions = {
+unions_example = {
     'frequencies': ['habbits_radar', 'habbits_linear'],
     'CPFC': ['CPFC_violins', 'CPFC_linear']
 }
 
 
-def main(CRED_FILE_PATH, SERVICES, SPREADSHEET_ID, bot_token, chat_id, functions):
+def main(CRED_FILE_PATH, SERVICES, SPREADSHEET_ID, bot_token, chat_id, functions, kwargs):
     print('-------------------------------------')
     start1 = time.time()
     resource = con.extract_data(CRED_FILE_PATH, SERVICES)
     t1 = time.time() - start1
     print(f'---> Data was extracted for {round(t1, 2)} s.')
     start2 = time.time()
-    df, metadata, trains = dt.transform_enrichment_data(resource, SPREADSHEET_ID)
+    df, metadata, trains, expenses, income = dt.transform_enrichment_data(resource, SPREADSHEET_ID)
     t2 = time.time() - start2
     print(f'---> Data was transformed for {round(t2, 2)} s.')
     start3 = time.time()
     snd.send_messages(
         bot_token,
         chat_id,
-        launch.launch_plot_functions(functions, df, metadata, trains, **kwargs),
+        launch.launch_plot_functions(functions, df, metadata, trains, expenses, income, **kwargs),
         functions
     )
     t3 = time.time() - start3
@@ -55,6 +56,9 @@ def main(CRED_FILE_PATH, SERVICES, SPREADSHEET_ID, bot_token, chat_id, functions
 if __name__ == '__main__':
     bot_token = sys.argv[1]
     chat_id = sys.argv[2]
+    scenario = json.load(open(sys.argv[3], 'r', encoding='utf-8'))
+    kwargs = scenario.get('kwargs', kwargs_example)
+    unions = scenario.get('unions', unions_example)
 
     config = configparser.ConfigParser()
     config.read("/abc/py_conf/global_config.cfg")
@@ -67,7 +71,7 @@ if __name__ == '__main__':
     # check what functions are exist and add them
     # functions is something like [[func, func, ...], func, ...]
     functions = []
-    for f in sys.argv[3:]:
+    for f in sys.argv[4:]:
         if (x := unions.get(f, False)):
             functions.append([getattr(pl, subf) for subf in x])
         elif f in dir(pl):
@@ -77,6 +81,6 @@ if __name__ == '__main__':
     print()
 
     if functions:
-        main(CRED_FILE_PATH, SERVICES, SPREADSHEET_ID, bot_token, chat_id, functions)
+        main(CRED_FILE_PATH, SERVICES, SPREADSHEET_ID, bot_token, chat_id, functions, kwargs)
     else:
         print('No valid functions recieved.')
