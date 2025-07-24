@@ -1,0 +1,14 @@
+{
+    "kwargs": {
+        "habbits_radar": {"exclude": ["creatine", "was_in_university"]},
+        "habbits_linear": {"grannulation": "week",
+                        "exclude": ["creatine", "was_in_university"],
+                        "number_of_weeks": 10},
+        "nutrition_heatmap": null,
+        "CPFC_linear": {"grannulation": "day", "displayed_times": 30, "show_gen_cond": true}
+    },
+    "unions": {
+        "frequencies": ["habbits_radar", "habbits_linear"],
+        "CPFC": ["CPFC_violins", "CPFC_linear"]
+    }
+}
