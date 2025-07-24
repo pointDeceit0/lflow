@@ -9,17 +9,21 @@ import tech.connection as con
 import tech.launch as launch
 import tech.sending as snd
 
-
+# all possible kwargs are reflected in according functions
 kwargs = {
+    # src/visualizations/plots.py
     "habbits_radar": {'exclude': ('creatine', 'was_in_university')},
     "habbits_linear": {'grannulation': 'week',
                        'exclude': ('creatine', 'was_in_university'),
                        'number_of_weeks': 10},
     "nutrition_heatmap": None,
+    "CPFC_linear": {'grannulation': 'month', 'displayed_times': 5, 'show_gen_cond': True}
 }
 
+# unions of plots in one message, TODO: text showed only for first plot
 unions = {
-    'frequencies': ['habbits_radar', 'habbits_linear']
+    'frequencies': ['habbits_radar', 'habbits_linear'],
+    'CPFC': ['CPFC_violins', 'CPFC_linear']
 }
 
 

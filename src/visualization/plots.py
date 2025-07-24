@@ -343,3 +343,128 @@ def CPFC_violins(df: pd.DataFrame, metadata: pd.DataFrame, **kwargs) -> Tuple[By
                 '\n\\* _changes are shown relative to the mean of previous weeks._')
 
     return _convert_to_bytes(fig), message
+
+
+def CPFC_linear(df: pd.DataFrame, metadata: pd.DataFrame, **kwargs) -> Tuple[BytesIO, str]:
+    """Makes 3 linear plot (due to different scale) of callories | carbohydrates | proteins and fats.
+       Also general condition line is reflected regarding to max value of feature
+
+    Args:
+        df (pd.DataFrame): master dataframe
+        metadata (pd.DataFrame): metadata of master dataframe. Columns 'feature' and 'metatype' are neccesary
+
+        ** grannulation(Any['day', 'week', 'month']): grannulation of grouping. Defaults to "week".
+        ** displayed_times(int): how many grouped values to show. Defaults to 10.
+        ** show_gen_cond(bool): True if to show general condition. Defaults to True.
+
+    Returns:
+        Tuple[BytesIO, str]: Tuple[BytesIO, str]: BytesIO view of plot and message with plot
+    """
+    # kwargs argument
+    if (grannulation := kwargs.get('grannulation', 'week')) not in ('day', 'week', 'month'):
+        return None
+
+    # kwargs argument
+    show_gen_cond = kwargs.get('show_gen_cond', False)
+    df = df[
+        ['date', 'period'] + (['general_condition'] if show_gen_cond else []) +
+        metadata.loc[metadata['metatype'] == 'nutrition_tracking', 'feature'].to_list()
+    ]
+
+    # filling dates consequently
+    df = pd.DataFrame(
+        {
+            'date': pd.date_range(
+                start=df['date'].min(), end=df['date'].max() + datetime.timedelta(6 - df['date'].max().weekday()),
+                freq='D'
+            ).date
+        }
+    ).merge(df, 'left', 'date')
+
+    # defining start of week, month. If day leave the same
+    match grannulation:
+        case 'month':
+            df['grannulation'] = df['date'].map(lambda x: x.replace(day=1))
+        case 'week':
+            df['grannulation'] = (df['date'] - (df['date'].map(lambda x: datetime.timedelta(x.weekday()))))
+        case 'day':
+            df['grannulation'] = df['date']
+
+    groups = df.iloc[:, 2:].groupby('grannulation').apply(
+            lambda x: x.mean() if ~x.isna().any().all() else None
+    )
+
+    # defining x axis. If month -> days from date are deleted
+    #                     weeks -> years from date are deleted, showed starts of weeks
+    #                     days  -> only days are showed, according monthes and years reflected in the title
+    match grannulation:
+        case 'month':
+            x = groups.index.map(lambda x: f'{str(x).split('-')[0]}-{str(x).split('-')[1]}')
+        case 'week':
+            x = groups.index.map(lambda x: f'{str(x).split('-')[1]}-{str(x).split('-')[2]}')
+        case 'day':
+            x = groups.index.map(lambda x: str(x).split('-')[2])
+
+    groups = groups.iloc[-kwargs.get('displayed_times', 10):]
+    x = x.values[-kwargs.get('displayed_times', 10):]
+
+    # TODO: add to kwargs bellow variables
+    color_protein, color_fats = "#6A9700", "#4d88b3"
+    color_carbs = "#1a5a77"
+    color_callories = "#f7e64c"
+    color_gen_cond = "#e64040"
+
+    fig, ax = plt.subplots(1, 3, figsize=(20, 10))
+    xna = x[~groups['protein'].isna()]
+
+    ax[2].plot(x, groups['protein'], color=color_protein)
+    ax[2].plot(x, groups['fats'], color=color_fats)
+    ax[1].plot(x, groups['carbohydrates'], color=color_carbs)
+    ax[0].plot(x, groups['callories'], color=color_callories)
+
+    if show_gen_cond:  # adding general condition line
+        gen_cond_share = groups['general_condition'] / 100
+        # second line is a upper bound to show relative share of general condition, lower bound is zero
+        ax[2].plot(x, gen_cond_share * groups[['protein', 'fats']].max().max(), linestyle='--', color=color_gen_cond)
+        ax[2].plot(xna, np.ones(xna.shape[0]) * groups[['protein', 'fats']].max().max(), linestyle='--',
+                   color=color_gen_cond, alpha=0.3)
+        ax[1].plot(x, gen_cond_share * groups['carbohydrates'].max(), linestyle='--', color=color_gen_cond)
+        ax[1].plot(xna, np.ones(xna.shape[0]) * groups['carbohydrates'].max(), linestyle='--',
+                   color=color_gen_cond, alpha=0.3)
+        ax[0].plot(x, gen_cond_share * groups['callories'].max(), linestyle='--', color=color_gen_cond)
+        ax[0].plot(xna, np.ones(xna.shape[0]) * groups['callories'].max(), linestyle='--',
+                   color=color_gen_cond, alpha=0.3)
+
+    ax[2].legend(['protein', 'fats'] + ['general condition share'] if show_gen_cond else [], loc='upper right')
+    ax[2].set_xlabel(kwargs.get('grannulation', None), loc='right')
+    ax[2].set_ylabel('g', loc='top', rotation=0)
+
+    ax[1].legend(['carbohydrates'] + ['general condition share'] if show_gen_cond else [], loc='upper right')
+    ax[1].set_xlabel(kwargs.get('grannulation', None), loc='right')
+    ax[1].set_ylabel('g', loc='top', rotation=0)
+
+    ax[0].legend(['callories'] + ['general condition share'] if show_gen_cond else [], loc='upper right')
+    ax[0].set_xlabel(kwargs.get('grannulation', None), loc='right')
+    ax[0].set_ylabel('kcall', loc='top', rotation=0)
+
+    # title depends on grannutlation, monthes and years assigning
+    match grannulation:
+        case 'month':
+            title = ', '.join(np.unique(groups.index.map(lambda x: str(x.year)))) +\
+                    (' years' if len(np.unique(groups.index.map(lambda x: str(x.year)))) > 1 else ' year')
+        case 'week':
+            title = ', '.join(np.unique(groups.index.map(lambda x: str(x.year)))) +\
+                    (' years' if len(np.unique(groups.index.map(lambda x: str(x.year)))) > 1 else ' year')
+        case 'day':
+            title = ', '.join(np.unique(groups.index.map(lambda x: str(x.year)))) +\
+                    (' years' if len(np.unique(groups.index.map(lambda x: str(x.year)))) > 1 else ' year') + ' for ' +\
+                    ', '.join(np.unique(groups.index.map(lambda x: str(x.month)))) +\
+                    (' monthes' if len(np.unique(groups.index.map(lambda x: str(x.month)))) > 1 else ' month')
+
+    fig.suptitle('CPFC for ' + title, fontsize=16)
+    fig.tight_layout()
+
+    # TODO:
+    message = '_comming soon..._'
+
+    return _convert_to_bytes(fig), message
