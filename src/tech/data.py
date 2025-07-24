@@ -180,6 +180,7 @@ def transform_enrichment_data(resource: Resource, SPREADSHEET_ID: str) -> List[p
 
     trains['train'] = 1
     df = df.merge(trains[['date', 'train']], 'left', 'date')
+    df.loc[:, 'train'] = df.loc[:, 'train'].fillna(0)
 
     metadata = pd.concat([
         metadata,
