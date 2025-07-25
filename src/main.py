@@ -50,7 +50,7 @@ def main(CRED_FILE_PATH, SERVICES, SPREADSHEET_ID, bot_token, chat_id, functions
     print(f'Total execution time is {round(t1 + t2 + t3, 2)} s.')
     print('-------------------------------------')
 
-    return df, metadata, trains
+    return df, metadata, trains, expenses, income
 
 
 if __name__ == '__main__':
