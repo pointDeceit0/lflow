@@ -1,10 +1,12 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+from math import floor
 import seaborn as sns
 import datetime
 from io import BytesIO
 from typing import Tuple
+from prettytable import PrettyTable
 
 from scipy.stats import ttest_ind
 
@@ -19,6 +21,10 @@ from matplotlib.patches import Patch
 
 
 plt.style.use('seaborn-v0_8-whitegrid')
+
+# number orders graduation
+orders = {3: 'K', 4: 'K', 5: 'K', 6: 'M', 7: 'M', 8: 'M', 9: 'B', 10: 'B', 11: 'B', 12: 'T'}
+RUBLE_SIGN = '₽'
 
 
 def _convert_to_bytes(fig) -> BytesIO:
@@ -358,7 +364,7 @@ def CPFC_linear(df: pd.DataFrame, metadata: pd.DataFrame, **kwargs) -> Tuple[Byt
         ** show_gen_cond(bool): True if to show general condition. Defaults to True.
 
     Returns:
-        Tuple[BytesIO, str]: Tuple[BytesIO, str]: BytesIO view of plot and message with plot
+        Tuple[BytesIO, str]: BytesIO view of plot and message with plot
     """
     # kwargs argument
     if (grannulation := kwargs.get('grannulation', 'week')) not in ('day', 'week', 'month'):
@@ -468,3 +474,154 @@ def CPFC_linear(df: pd.DataFrame, metadata: pd.DataFrame, **kwargs) -> Tuple[Byt
     message = '_comming soon..._'
 
     return _convert_to_bytes(fig), message
+
+
+def expenses_pie(expenses: pd.DataFrame, income: pd.DataFrame, exp_inc='Expenses', **kwargs) -> Tuple[BytesIO, str]:
+    """Generalizing of pie chart for expenses and incomes, income could be implemented with income_pie, what is wrap
+        of using expenses_pie for incomes
+
+    Args:
+        expenses (pd.DataFrame): expenses dataframe
+        income (pd.DataFrame): incomes dataframe
+        exp_inc (str, optional): "Expenses" or "Income" — needed for plot title. Defaults to 'Income'.
+
+        # TODO: make generalization for dates in all tables
+        ** start (str): date in following format: "%m/%d/%Y. The start date of calculating period. If it is not
+                        set the first date in the column date of table will be used
+        ** end (str): date in following format: "%m/%d/%Y. The end date of calculating period. If it is not
+                      set the last date in the column date of table will be used
+        ** period (Any['day', 'week', 'previous week', 'month', 'year', 'all time']): if start or end is not
+                      specified period will be used. All possible periods corresponds to its semantic sense. The start
+                      of the week is first day of the coming week, end is current date or last day of the week.
+                      If there is no start or end, or period "week" period is taken as default.
+        ** residual_generalizing_share (float): the part of the amount that will be grouped in one. Defaults to 0.1.
+
+    Returns:
+        Tuple[BytesIO, str]: BytesIO view of plot and message with plot
+    """
+    start, end = kwargs.get('start'), kwargs.get('end')
+    period = kwargs.get('period')
+    residual_generalizing_share = kwargs.get('residual_generalizing_share', 0.1)
+
+    # period finding
+    if start is not None or end is not None:  # start or end are prioritized over period
+        cond_start = expenses['date'] >= datetime.datetime.strptime(start, '%m/%d/%Y').date()\
+            if start is not None else True
+        cond_end = expenses['date'] <= datetime.datetime.strptime(end, '%m/%d/%Y').date()\
+            if end is not None else True
+    elif period is not None:  # if start or end is not defined period is calculated
+        today = datetime.datetime.today().date()
+        match period:
+            case 'day':
+                cond_start = expenses['date'] == today
+                cond_end = expenses['date'] == today
+            case 'week':
+                cond_start = expenses['date'] >= (today - datetime.timedelta(datetime.datetime.today().weekday()))
+                cond_end = expenses['date'] <= today
+            case 'previous week':
+                cond_start = expenses['date'] >= (
+                    today - datetime.timedelta(datetime.datetime.today().weekday()) - datetime.timedelta(7)
+                )
+                cond_end = expenses['date'] <= today -\
+                    datetime.timedelta(datetime.datetime.today().weekday()) - datetime.timedelta(1)
+            case 'month':
+                cond_start = expenses['date'] >= datetime.datetime.today().replace(day=1).date()
+                cond_end = expenses['date'] <= today
+            case 'year':
+                cond_start = expenses['date'] >= datetime.datetime.today().replace(day=1, month=1).date()
+                cond_end = expenses['date'] <= today
+            case 'all time':
+                cond_start = np.full(expenses.shape[0], True)
+                cond_end = np.full(expenses.shape[0], True)
+    else:  # week period is taken as default
+        today = datetime.datetime.today().date()
+        period = 'week'
+        cond_start = expenses['date'] >= (today - datetime.timedelta(datetime.datetime.today().weekday()))
+        cond_end = expenses['date'] <= today
+    # total sum calculating
+    order = floor(np.log10(x)) if (x := abs(income['amount'].sum() - expenses['amount'].sum())) > 0 else 1
+    total_current_sum = f"{RUBLE_SIGN}{round(x / 10**(order // 3 * 3), 2)}" +\
+        f"{orders.get(order, '')}"
+
+    expenses = expenses[cond_start & cond_end]
+
+    # finding sum by each category
+    categories = expenses[['category', 'amount']].groupby('category').agg('sum').sort_values('amount')
+    categories['share'] = categories['amount'] / categories['amount'].sum()
+    categories['share_cumsum'] = categories['share'].cumsum()
+    # concatenating of categories and residual part
+    categories = pd.concat(
+        [
+            pd.DataFrame(
+                categories.loc[categories['share_cumsum'] < residual_generalizing_share, ['amount', 'share']].sum(),
+                columns=['Другое']
+            ).T,
+            categories[categories['share_cumsum'] >= residual_generalizing_share]
+        ]
+    )
+
+    fig, ax = plt.subplots(figsize=(16, 12))
+    wedges, _ = ax.pie(categories['amount'],
+                       labels=categories.index, radius=1, wedgeprops={'linewidth': 0.5, 'edgecolor': 'white'},
+                       colors=plt.cm.Set2.colors, startangle=90)
+    for w in wedges:  # the inside radius of unpainted part of pie chart
+        w.set_width(0.5)
+
+    # title making
+    if start is not None and end is not None:  # with both start and end defined
+        title_text = f'{start} — {end}'
+    elif start is None and end is not None:  # only end is defined
+        title_text = f'{datetime.datetime.strftime(expenses.loc[0, 'date'], '%m/%d/%Y')} — {end}'
+    elif start is not None and end is None:  # only start
+        title_text = f'{start} — {datetime.datetime.strftime(expenses.loc[expenses.shape[0] - 1, 'date'], '%m/%d/%Y')}'
+    else:  # if period
+        title_text = period
+    fig.suptitle(f'{exp_inc} for {title_text}', fontsize=22)
+
+    # Text in the centre of plot. Indents was obtained experimentally
+    # defining the order of the amount to use reduction from orders
+    order = floor(np.log10(x)) if (x := categories['amount'].sum()) > 0 else 1
+    sum_expenses_centre = f"{RUBLE_SIGN}{round(categories['amount'].sum() / 10**(order // 3 * 3), 2)}" +\
+        f"{orders.get(order, '')}"
+    ax.text(len(sum_expenses_centre) / 2 * (-0.075), -0.05, sum_expenses_centre, fontsize=50)
+    try:
+        fig.tight_layout()
+    except Exception as e:
+        print(f"{e}\nin expenses\income pie")
+
+    # TODO: two pies in one (expenses and income), the problem of that is message couldn't be shown in text of plot
+    # TODO: in place, so it should be solved somehow.
+    # wrapping message in table to observe aligning
+    table = PrettyTable()
+    table.field_names = ['Категория', 'Часть', 'Итог']
+    for name, row in categories[::-1].iterrows():
+        # doesn't work properly with telebot messages (aligning)
+        # message += f'{name}\t\t{round(row['share'] * 100)}%\t{RUBLE_SIGN}{round(row['amount']):,}\n'
+        table.add_row([name, f'{round(row['share'] * 100)}%', f'{RUBLE_SIGN}{round(row['amount']):,}'])
+    message = f"*Current balance*: {total_current_sum}\n\n"
+    message += '```\n{}```'.format(table.get_string())
+
+    return _convert_to_bytes(fig), message
+
+
+def income_pie(expenses: pd.DataFrame, income: pd.DataFrame, exp_inc='Income', **kwargs) -> Tuple[BytesIO, str]:
+    """expenses_pie is similar to income_pie despite the fact of income df except expenses df
+
+    Args:
+        expenses (pd.DataFrame): expenses dataframe
+        income (pd.DataFrame): incomes dataframe
+        exp_inc (str, optional): "Expenses" or "Income" — needed for plot title. Defaults to 'Income'.
+
+        ** start (str): date in following format: "%m/%d/%Y. The start date of calculating period. If it is not
+                        set the first date in the column date of table will be used
+        ** end (str): date in following format: "%m/%d/%Y. The end date of calculating period. If it is not
+                      set the last date in the column date of table will be used
+        ** period (Any['day', 'week', 'previous week', 'month', 'year', 'all time']): if start or end is not
+                      specified period will be used. All possible periods corresponds to its semantic sense. The start
+                      of the week is first day of the coming week, end is current date or last day of the week.
+        ** residual_generalizing_share (float): the part of the amount that will be grouped in one. Defaults to 0.1.
+
+    Returns:
+        Tuple[BytesIO, str]: BytesIO view of plot and message with plot
+    """
+    return expenses_pie(income, expenses, exp_inc, **kwargs)

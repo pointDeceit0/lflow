@@ -42,22 +42,22 @@ def launch_plot_functions(functions: List[Union[List[Callable], Callable]],
         if isinstance(f, list):
             tmp = []
             for subf in f:
-                if kwargs is not None and (x := kwargs.get(subf.__name__, False)) and\
-                        (subf.__name__.startswith('expenses_') or subf.__name__.startswith('income_')):
+                if kwargs is not None and (x := kwargs.get(func_name := subf.__name__, False)) and\
+                        (func_name.startswith('expenses_') or func_name.startswith('income_')):
                     tmp.append(subf(expenses, income, **x))
-                elif subf.__name__.startswith('expenses_') or f.__name__.startswith('income_'):
+                elif func_name.startswith('expenses_') or func_name.startswith('income_'):
                     tmp.append(subf(expenses, income))
-                elif kwargs is not None and (x := kwargs.get(subf.__name__, False)):
+                elif kwargs is not None and x:
                     tmp.append(subf(df, metadata, **x))
                 else:
                     tmp.append(subf(df, metadata))
             ret.append(tmp)
-        elif kwargs.get(f.__name__, None) is not None and (x := kwargs.get(f.__name__, False)) and\
-                (f.__name__.startswith('expenses_') or f.__name__.startswith('income_')):
+        elif kwargs.get(func_name := f.__name__, None) is not None and (x := kwargs.get(func_name, False)) and\
+                (func_name.startswith('expenses_') or func_name.startswith('income_')):
             ret.append(f(expenses, income, **x))
-        elif f.__name__.startswith('expenses_') or f.__name__.startswith('income_'):
+        elif func_name.startswith('expenses_') or func_name.startswith('income_'):
             ret.append(f(expenses, income))
-        elif kwargs.get(f.__name__, None) is not None and (x := kwargs.get(f.__name__, False)):
+        elif kwargs.get(func_name, None) is not None and x:
             ret.append(f(df, metadata, **x))
         else:
             ret.append(f(df, metadata))
