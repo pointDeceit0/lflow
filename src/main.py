@@ -18,13 +18,16 @@ kwargs_example = {
                        'exclude': ('creatine', 'was_in_university'),
                        'number_of_weeks': 10},
     "nutrition_heatmap": None,
-    "CPFC_linear": {'grannulation': 'day', 'displayed_times': 30, 'show_gen_cond': True}
+    "CPFC_linear": {'grannulation': 'day', 'displayed_times': 30, 'show_gen_cond': True},
+    "expenses_pie": {"period": "year"},
+    "income_pie": {"period": "year"},
 }
 
 # unions of plots in one message, TODO: text showed only for first plot
 unions_example = {
     'frequencies': ['habbits_radar', 'habbits_linear'],
-    'CPFC': ['CPFC_violins', 'CPFC_linear']
+    'CPFC': ['CPFC_violins', 'CPFC_linear'],
+    'finances': ['expenses_pie', 'income_pie']
 }
 
 
