@@ -66,7 +66,7 @@ if __name__ == '__main__':
     config = configparser.ConfigParser()
     config.read("/abc/py_conf/global_config.cfg")
     SPREADSHEET_ID = str(config["GOOGLE_SPREADSHEETS"]["lflow"])
-    CRED_FILE_PATH = r'C:\abc\creds_googledrive_lflow.json'
+    CRED_FILE_PATH = r'/abc/creds_googledrive_lflow.json'
 
     SERVICES = ['https://www.googleapis.com/auth/spreadsheets',
                 'https://www.googleapis.com/auth/drive']
